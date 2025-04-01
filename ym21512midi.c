@@ -1,7 +1,7 @@
 /*
 ym21512midi.c
-A revised conversion of the provided VB.NET code to C using secure functions (strcpy_s, strncpy_s, sprintf_s) and with realloc casts.
-Compile with a C99 compiler (e.g., MSVC or gcc with secure alternatives provided).
+A revised conversion of the VB.NET code to C.
+Compile with a C99 compiler (e.g., MSVC or gcc).
 */
 
 #include <stdio.h>
@@ -49,6 +49,8 @@ typedef struct {
 } CurrVoice_Struct;
 
 /* --- Global variables --- */
+int Debug = 0;
+
 FILE* in_file = NULL;
 FILE* out_file_midi = NULL;
 FILE* out_file_syx = NULL;
@@ -93,7 +95,7 @@ int TQN = 96;
 int KeyCodeToMIDINote(int data, int adjustOctave);
 
 /* --- Utility Functions --- */
-int Carrier(int alg, int op) {
+static int Carrier(int alg, int op) {
     int c = 0;
     if (op == 0) {           // M1
         if (alg == 7) c = 1;
@@ -110,17 +112,17 @@ int Carrier(int alg, int op) {
     return c;
 }
 
-int BytesToInt32(uint8_t* bytes) {
+static int BytesToInt32(uint8_t* bytes) {
     return ((uint32_t)bytes[3] << 24) | ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[1] << 8) | ((uint32_t)bytes[0]);
 }
 
-int BytesToInt16(uint8_t* b) {
+static int BytesToInt16(uint8_t* b) {
     int v = b[1];
     v = (v << 8) | b[0];
     return v;
 }
 
-void BytesToText(uint8_t* b, int l, char* out_str, size_t outSize) {
+static void BytesToText(uint8_t* b, int l, char* out_str, size_t outSize) {
     int i;
     if (l + 1 > (int)outSize) l = (int)outSize - 1;
     for (i = 0; i < l; i++) {
@@ -130,7 +132,7 @@ void BytesToText(uint8_t* b, int l, char* out_str, size_t outSize) {
 }
 
 /* --- MIDI Output --- */
-void Send_Midi(int Command, int Param1, int Param2) {
+static void Send_Midi(int Command, int Param1, int Param2) {
     uint8_t t[4] = { 0,0,0,0 };
     int delay2 = 0;
     double delay3 = 0;
@@ -177,20 +179,19 @@ void Send_Midi(int Command, int Param1, int Param2) {
     }
 }
 
-void AddVoice(Voice_Struct v) {
-    // Allocate new memory safely
-    Voice_Struct* temp = (Voice_Struct*)realloc(Voices, (VoicesCount + 1) * sizeof(Voice_Struct));
+static void AddVoice(Voice_Struct v) {
+    Voice_Struct* temp = (Voice_Struct*)realloc(Voices, ((unsigned long long)(VoicesCount) + 1) * sizeof(Voice_Struct));
     if (temp == NULL) {
         fprintf(stderr, "Memory allocation failed in AddVoice()\n");
-        return;  // Don't modify Voices if allocation fails
+        return;
     }
 
-    Voices = temp;  // Only assign if realloc succeeds
+    Voices = temp;
     Voices[VoicesCount] = v;
     VoicesCount++;
 }
 
-int CompareVoice(Voice_Struct v1, Voice_Struct v2) {
+static int CompareVoice(Voice_Struct v1, Voice_Struct v2) {
     int op;
     if (v1.LFRQ != v2.LFRQ) return 0;
     if (v1.AMD != v2.AMD) return 0;
@@ -221,7 +222,7 @@ int CompareVoice(Voice_Struct v1, Voice_Struct v2) {
     return 1;
 }
 
-int FindVoice(Voice_Struct v) {
+static int FindVoice(Voice_Struct v) {
     int i;
     int found = -1;
     if (VoicesCount > 0) {
@@ -240,9 +241,9 @@ int FindVoice(Voice_Struct v) {
 }
 
 /* --- Get current voice from register values --- */
-CurrVoice_Struct GetCurrentVoice(int chan) {
+static CurrVoice_Struct GetCurrentVoice(int chan) {
     int op, TL_Min;
-    CurrVoice_Struct curr_voice;
+    CurrVoice_Struct curr_voice = {0};
     curr_voice.Voice.Name[0] = '\0';
 
     curr_voice.Voice.AMS = Registers[0x38 + chan] & 3;
@@ -306,7 +307,7 @@ CurrVoice_Struct GetCurrentVoice(int chan) {
 }
 
 /* --- Send YM register commands --- */
-void SendYM() {
+static void SendYM() {
     int KF_PB, Chan;
     double Vol;
 
@@ -389,7 +390,7 @@ void SendYM() {
 /* --- Parse one command from input file --- */
 static void Parse() {
     if (fread(d, 1, 1, in_file) != 1) return;
-    printf("Filepos: 0x%x, Register: 0x%x, Total length: 0x%x\n", filepos, d[0], filelength);
+    if (Debug) printf("Filepos: 0x%x, Register: 0x%x, Total length: 0x%x\n", filepos, d[0], filelength);
     filepos++;
 
     if (((d[0] >= 0x30) && (d[0] <= 0x3F)) || (d[0] == 0x4F) || (d[0] == 0x50)) {
@@ -545,8 +546,8 @@ static void Voice_to_FB01(Voice_Struct Voice, uint8_t* fb01_voice) {
 
 /* --- Write Instruments (SYX and OPM) --- */
 static void WriteInsts(const char* basepath) {
-    uint8_t syx_buff[128];
-    uint8_t fb01_voice[64];
+    uint8_t syx_buff[128] = { 0 };
+    uint8_t fb01_voice[64] = { 0 };
     int frlp, frlp2, length;
     char st[128];
 
@@ -582,7 +583,7 @@ static void WriteInsts(const char* basepath) {
     fwrite(syx_buff, 1, length, out_file_syx);
     fputc(Checksum(syx_buff, length), out_file_syx);
 
-    fprintf(out_file_opm, "//Created by ym21512midi.cpp\n\n");
+    fprintf(out_file_opm, "// Created by ym21512midi.c\n\n");
 
     for (frlp = 0; frlp < 48; frlp++) {
         if (frlp < VoicesCount) {
@@ -634,7 +635,7 @@ static void WriteInsts(const char* basepath) {
     fputc(0xF7, out_file_syx);
 }
 
-void WriteMIDIHeader() {
+static void WriteMIDIHeader() {
     long currentPos = ftell(out_file_midi);
     /* The MIDI file begins with a 14-byte header and an 8-byte track header.
        Update the 4-byte track length at offset 18. */
@@ -682,6 +683,40 @@ int KeyCodeToMIDINote(int data, int adjustOctave) {
     return NoteVal;
 }
 
+static void parseArguments(int argc, char* argv[], char* inputPath) {
+    TL_Tol = 10;
+    Gain = 1.0;
+    BPM = 120;
+    TQN = 96;
+    Debug = 0;
+    inputPath[0] = '\0';
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-d") == 0) {
+            Debug = 1;
+        }
+        else if (strcmp(argv[i], "-tl_tol") == 0 && i + 1 < argc) {
+            TL_Tol = atoi(argv[++i]);
+        }
+        else if (strcmp(argv[i], "-gain") == 0 && i + 1 < argc) {
+            Gain = atof(argv[++i]);
+        }
+        else if (strcmp(argv[i], "-bpm") == 0 && i + 1 < argc) {
+            BPM = atof(argv[++i]);
+        }
+        else if (strcmp(argv[i], "-tqn") == 0 && i + 1 < argc) {
+            TQN = atoi(argv[++i]);
+        }
+        else if (argv[i][0] == '-') {
+            printf("Error: Unknown parameter %s\n", argv[i]);
+            exit(1);
+        }
+        else {
+            strncpy_s(inputPath, 256, argv[i], _TRUNCATE);
+        }
+    }
+}
+
 /* --- Main --- */
 int main(int argc, char* argv[]) {
     char inputPath[256];
@@ -692,16 +727,17 @@ int main(int argc, char* argv[]) {
     double tempD;
 
     if (argc < 2) {
-        printf("Usage: %s <input VGM file> [TL_Tol] [Gain] [BPM] [TQN]\n", argv[0]);
+        printf("Usage: %s [-d] [-tl_tol <value>] [-gain <value>] [-bpm <value>] [-tqn <value>] <input VGM file>\n", argv[0]);
         return 1;
     }
-    /* Use secure version of string copy */
-    strncpy_s(inputPath, sizeof(inputPath), argv[1], _TRUNCATE);
-    TL_Tol = (argc > 2) ? atoi(argv[2]) : 10;
-    Gain = (argc > 3) ? atof(argv[3]) : 1.0;
-    BPM = (argc > 4) ? atof(argv[4]) : 120;
-    TQN = (argc > 5) ? atoi(argv[5]) : 96;
 
+    parseArguments(argc, argv, inputPath);
+
+    if (strlen(inputPath) == 0) {
+        printf("Error: Input file path is required\n");
+        return 1;
+    }
+    
     if (fopen_s(&in_file, inputPath, "rb") != 0 || in_file == NULL) {
         printf("Cannot open input file %s\n", inputPath);
         return 1;
