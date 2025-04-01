@@ -131,6 +131,12 @@
   <ItemGroup>
     <ClCompile Include="ym21512midi.c" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="readme.md">
+      <SubType>
+      </SubType>
+    </None>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
