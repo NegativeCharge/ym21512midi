@@ -1,5 +1,5 @@
 /*
-vgm_to_midi_fixed_secure_updated.c
+ym21512midi.c
 A revised conversion of the provided VB.NET code to C using secure functions (strcpy_s, strncpy_s, sprintf_s) and with realloc casts.
 Compile with a C99 compiler (e.g., MSVC or gcc with secure alternatives provided).
 */
@@ -484,7 +484,7 @@ static uint8_t Checksum(uint8_t* data, int len) {
 }
 
 /* --- Convert Voice to FB01 format --- */
-void Voice_to_FB01(Voice_Struct Voice, uint8_t* fb01_voice) {
+static void Voice_to_FB01(Voice_Struct Voice, uint8_t* fb01_voice) {
     int frlp, op2, car, TL;
     uint8_t default_fb01[64] = { 83,105,110,101,87,97,118,0,205,128,0,120,0,0,64,0,
        127,0,0,1,31,128,0,15,127,0,0,1,31,128,0,15,
@@ -544,7 +544,7 @@ void Voice_to_FB01(Voice_Struct Voice, uint8_t* fb01_voice) {
 }
 
 /* --- Write Instruments (SYX and OPM) --- */
-void WriteInsts(const char* basepath) {
+static void WriteInsts(const char* basepath) {
     uint8_t syx_buff[128];
     uint8_t fb01_voice[64];
     int frlp, frlp2, length;
@@ -582,7 +582,7 @@ void WriteInsts(const char* basepath) {
     fwrite(syx_buff, 1, length, out_file_syx);
     fputc(Checksum(syx_buff, length), out_file_syx);
 
-    fprintf(out_file_opm, "//Created by VGM_to_MID (fixed secure updated version)\n\n");
+    fprintf(out_file_opm, "//Created by ym21512midi.cpp\n\n");
 
     for (frlp = 0; frlp < 48; frlp++) {
         if (frlp < VoicesCount) {
@@ -634,13 +634,12 @@ void WriteInsts(const char* basepath) {
     fputc(0xF7, out_file_syx);
 }
 
-/* --- Write and update the MIDI header --- */
 void WriteMIDIHeader() {
     long currentPos = ftell(out_file_midi);
     /* The MIDI file begins with a 14-byte header and an 8-byte track header.
        Update the 4-byte track length at offset 18. */
     fseek(out_file_midi, 18, SEEK_SET);
-    uint8_t trackLength[4];
+    uint8_t trackLength[4] = {0};
     trackLength[0] = (MIDIByteCount >> 24) & 0xFF;
     trackLength[1] = (MIDIByteCount >> 16) & 0xFF;
     trackLength[2] = (MIDIByteCount >> 8) & 0xFF;
@@ -776,7 +775,7 @@ int main(int argc, char* argv[]) {
     printf("Ticks per quarter note = %d\n", TQN);
 
     /* Write initial MIDI header (MThd) and a track header placeholder */
-    uint8_t mthd[14] = { 'M','T','h','d', 0,0,0,6, 0,1, 0,1, static_cast<uint8_t>((TQN >> 8) & 0xFF), static_cast<uint8_t>(TQN & 0xFF) };
+    uint8_t mthd[14] = { 'M','T','h','d', 0,0,0,6, 0,1, 0,1, (uint8_t)((TQN >> 8) & 0xFF), (uint8_t)(TQN & 0xFF) };
     fwrite(mthd, 1, 14, out_file_midi);
     uint8_t mtrk[8] = { 'M','T','r','k', 0,0,0,0 };
     fwrite(mtrk, 1, 8, out_file_midi);
